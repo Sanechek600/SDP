@@ -70,7 +70,7 @@ if __name__ == "__main__":
         ('C4', 0.5), ('E4', 0.5), ('G4', 0.5), ('C5', 0.5), ('E5', 0.5), ('G5', 0.5), ('C6', 2), 
     ]
 
-    tempo = 0.32 
+    tempo = 0.32
     fs = 44100
     composition = np.array([])
 
@@ -93,10 +93,10 @@ if __name__ == "__main__":
     plt.figure(figsize=(12, 6))
 
     plt.subplot(2, 1, 1)
-    sample_tone = musical_tone(NOTES['A5'], 0.1, waveform='square', db=-10)
+    sample_tone = musical_tone(NOTES['A5'], 0.1, waveform='sawtooth', db=-10)
     t_axis = np.linspace(0, 0.1, len(sample_tone))
     plt.plot(t_axis[:882], sample_tone[:882]) 
-    plt.title("Compound tone oscillogram (A5, square, 20 ms)")
+    plt.title("Compound tone oscillogram (A5, sawtooth, 20 ms)")
     plt.xlabel("Time (s)")
     plt.ylabel("Amplitude")
     plt.grid()
