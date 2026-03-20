@@ -20,7 +20,7 @@ def my_acf(x: np.ndarray, m: int) -> float:
     x2 = x[m:] - mu
     acf_m = np.dot(x1, x2) / (N - m)
 
-    x1 = x[:N] - mu
+    x1 = x - mu
     x2 = x - mu
     acf_0 = np.dot(x1, x2) / N
 
@@ -31,7 +31,6 @@ def my_dtft(x: np.ndarray, fs: int, f: np.ndarray) -> np.ndarray:
     """
     Вычисляет амплитудный спектр сигнала x на частотах f (в Гц) с помощью ДВПФ.
     Если f - массив, возвращает массив амплитуд.
-    Реализация через скалярное произведение (векторизована для одного f).
     """
     N = len(x)
     n = np.arange(N)
@@ -54,14 +53,6 @@ def my_dtft(x: np.ndarray, fs: int, f: np.ndarray) -> np.ndarray:
 def psola(x: np.ndarray, fs: int, k: float) -> np.ndarray:
     """
     Изменяет частоту основного тона речи на основе алгоритма PSOLA.
-
-    Parameters:
-        x (np.ndarray): Входной одноканальный сигнал.
-        fs (int): Частота дискретизации.
-        k (float): Коэффициент изменения частоты.
-
-    Returns:
-        np.ndarray: Синтезированный сигнал с измененным основным тоном.
     """
     # Алгоритм Overlap-Add:
     # y(t) = sum_i w_i(t - t'_i) * x(t - t_i)
@@ -83,43 +74,28 @@ def psola(x: np.ndarray, fs: int, k: float) -> np.ndarray:
 
     y = np.zeros(int(len(x) * max(2.0, k)) + fs)
     new_center = 0.0
-    max_period = int(fs / 50)  # Порог (50 Гц) для отделения голоса от шума/пауз
 
     for i in range(1, len(pm_idx)):
         T = pm_idx[i] - pm_idx[i-1]
         
-        # глухие или паузы
-        if T > max_period:
-            unvoiced_segment = x[pm_idx[i-1] : pm_idx[i]].astype(np.float64)
+        # L = 2 * T_0
+        start_idx = pm_idx[i] - T
+        end_idx = pm_idx[i] + T
             
+        if start_idx >= 0 and end_idx < len(x):
+            segment = x[start_idx:end_idx].astype(np.float64).copy()
+               
+            window = triang(len(segment))
+            segment *= window
+                
             target_start = int(new_center)
-            target_end = target_start + len(unvoiced_segment)
-            
+            target_end = target_start + len(segment)
+                
             if target_end < len(y):
-                y[target_start:target_end] = unvoiced_segment
-            
-            new_center += len(unvoiced_segment)
-            
-        # гласные
-        else:
-            # L = 2 * T_0
-            start_idx = pm_idx[i] - T
-            end_idx = pm_idx[i] + T
-            
-            if start_idx >= 0 and end_idx < len(x):
-                segment = x[start_idx:end_idx].astype(np.float64).copy()
+                y[target_start:target_end] += segment
                 
-                window = triang(len(segment))
-                segment *= window
-                
-                target_start = int(new_center)
-                target_end = target_start + len(segment)
-                
-                if target_end < len(y):
-                    y[target_start:target_end] += segment
-                
-                # t'_i = t'_{i-1} + k * T_0
-                new_center += k * T
+            # t'_i = t'_{i-1} + k * T_0
+            new_center += k * T
 
     return y[:int(new_center + fs * 0.1)]
 
@@ -267,5 +243,3 @@ if __name__ == "__main__":
         print(f"\nСигнал с изменённым тоном (k={k}) сохранён в output_psola.wav")
     except Exception as e:
         print(f"Ошибка в PSOLA: {e}")
-
-    print("\nСкрипт выполнен.")
