@@ -4,18 +4,18 @@ import scipy.io.wavfile as wavfile
 from scipy.signal.windows import triang
 import statsmodels.tsa.stattools as sm
 import pyreaper
+from scipy.signal import find_peaks
 
 
 def my_acf(x: np.ndarray, m: int) -> float:
     """
     Вычисляет значение автокорреляционной функции для заданного сдвига m.
-    Формула: R[m] = 1/(N-m) * sum_{k=0}^{N-m-1} (x[k] - mu) * (x[k+m] - mu)
     """
     N = len(x)
     if m < 0 or m >= N:
         raise ValueError("m должно быть в диапазоне [0, N-1]")
     mu = np.mean(x)
-    # Используем срезы для эффективного вычисления
+    
     x1 = x[:N-m] - mu
     x2 = x[m:] - mu
     acf_m = np.dot(x1, x2) / (N - m)
@@ -34,14 +34,13 @@ def my_dtft(x: np.ndarray, fs: int, f: np.ndarray) -> np.ndarray:
     """
     N = len(x)
     n = np.arange(N)
-    # Обработка скалярного и векторного случая
+    
     if np.isscalar(f):
         omega = 2 * np.pi * f / fs
         exp_part = np.exp(-1j * omega * n)
         X = np.dot(x, exp_part)
         return np.abs(X)
     else:
-        # Векторный случай: вычисляем для каждого f
         X_abs = np.zeros_like(f, dtype=float)
         for i, freq in enumerate(f):
             omega = 2 * np.pi * freq / fs
@@ -54,8 +53,6 @@ def psola(x: np.ndarray, fs: int, k: float) -> np.ndarray:
     """
     Изменяет частоту основного тона речи на основе алгоритма PSOLA.
     """
-    # Алгоритм Overlap-Add:
-    # y(t) = sum_i w_i(t - t'_i) * x(t - t_i)
     
     x_norm = x.astype(np.float32)
     if np.max(np.abs(x_norm)) > 0:
@@ -64,38 +61,45 @@ def psola(x: np.ndarray, fs: int, k: float) -> np.ndarray:
     x_int16 = (x_norm * np.iinfo(np.int16).max).astype(np.int16)
     
     pm_times, pm, _, _, _ = pyreaper.reaper(x_int16, fs)
-    
     pitch_marks = pm_times[pm == 1]
-    
     if len(pitch_marks) < 2:
+        print("Недостаточно pitch marks, возвращен исходный сигнал")
         return x.copy()
     
     pm_idx = (pitch_marks * fs).astype(int)
 
     y = np.zeros(int(len(x) * max(2.0, k)) + fs)
     new_center = 0.0
+    max_period = int(fs / 50)
 
     for i in range(1, len(pm_idx)):
         T = pm_idx[i] - pm_idx[i-1]
         
-        # L = 2 * T_0
-        start_idx = pm_idx[i] - T
-        end_idx = pm_idx[i] + T
-            
-        if start_idx >= 0 and end_idx < len(x):
-            segment = x[start_idx:end_idx].astype(np.float64).copy()
-               
-            window = triang(len(segment))
-            segment *= window
+        if T <= max_period:
+            start_idx = pm_idx[i] - T
+            end_idx = pm_idx[i] + T
                 
-            target_start = int(new_center)
-            target_end = target_start + len(segment)
+            if start_idx >= 0 and end_idx < len(x):
+                segment = x[start_idx:end_idx].astype(np.float64).copy()
                 
-            if target_end < len(y):
-                y[target_start:target_end] += segment
-                
-            # t'_i = t'_{i-1} + k * T_0
-            new_center += k * T
+                window = triang(len(segment))
+                segment *= window
+                    
+                blank_start = int(new_center)
+                blank_end = blank_start + len(segment)
+                    
+                if blank_end < len(y):
+                    y[blank_start:blank_end] += segment
+                    
+                new_center += T * k
+        else:
+            blank_segment = x[pm_idx[i-1] : pm_idx[i]].astype(np.float64)
+            blank_start = int(new_center)
+            blank_end = blank_start + len(blank_segment)
+
+            if blank_end < len(y):
+                y[blank_start:blank_end] = blank_segment
+            new_center += len(blank_segment)
 
     return y[:int(new_center + fs * 0.1)]
 
@@ -107,10 +111,10 @@ if __name__ == "__main__":
     # Если стерео, берём первый канал
     if x.ndim > 1:
         x = x[:, 0]
-    # Приводим к float32 с диапазоном [-1, 1]
+    
     x = x.astype(np.float32) / np.max(np.abs(x))
 
-    # Для ускорения тестов и анализа возьмём фрагмент длительностью ~3 секунды с речью
+    #Берем фрагмент длиной 3 секунды
     start_sec = 0.5
     end_sec = 3.5
     start_idx = int(start_sec * fs)
@@ -118,14 +122,13 @@ if __name__ == "__main__":
     if end_idx > len(x):
         end_idx = len(x)
     x_seg = x[start_idx:end_idx].copy()
-    fs_seg = fs  # частота дискретизации не меняется
 
     # ---- 2. Проверка my_acf на маленьком сегменте ----
     test_len = 20
     x_test = x_seg[:test_len]
-    # Вычисляем библиотечную АКФ (adjusted=True)
+    
     acf_lib = sm.acf(x_test, adjusted=True, nlags=test_len-1)
-    # Сравниваем для нескольких m
+    
     print("Проверка my_acf (первые 5 значений):")
     for m in range(5):
         my_val = my_acf(x_test, m)
@@ -135,21 +138,18 @@ if __name__ == "__main__":
         print(f"m={m}: my_acf={my_val:.6f}, statsmodels={lib_val:.6f}, разница={abs(my_val-lib_val):.2e}")
 
     # ---- 3. Оценка основного тона по АКФ ----
-    # Для оценки используем сегмент x_seg (более продолжительный)
-    # Вычисляем АКФ для всех m (библиотечной функцией, быстрее)
     acf_full = sm.acf(x_seg, adjusted=True, nlags=len(x_seg)-1)
     m_axis = np.arange(len(acf_full))
 
-    # Поиск первого значимого пика в диапазоне частот 70–400 Гц
-    min_f = 70
-    max_f = 400
-    min_period = int(np.round(fs_seg / max_f))  # максимальный период в отсчётах
-    max_period = int(np.round(fs_seg / min_f))  # минимальный период
-    # Ищем пик в интервале [min_period, max_period] (исключая m=0)
+    min_f = 80
+    max_f = 500
+    min_period = int(np.round(fs / max_f))
+    max_period = int(np.round(fs / min_f))
+    
     search_region = acf_full[min_period:max_period+1]
     peak_idx_local = np.argmax(search_region)
     peak_m = min_period + peak_idx_local
-    f0_acf = fs_seg / peak_m
+    f0_acf = fs / peak_m
 
     # График АКФ
     plt.figure(figsize=(10, 4))
@@ -165,11 +165,11 @@ if __name__ == "__main__":
     plt.show()
 
     # ---- 4. Оценка основного тона по ДВПФ ----
-    freq_range = np.arange(min_f, max_f+1, 1.0)  # шаг 1 Гц
-    spectrum = my_dtft(x_seg, fs_seg, freq_range)
+    freq_range = np.arange(min_f, max_f+1, 1.0)
+    spectrum = my_dtft(x_seg, fs, freq_range)
     # Поиск максимума спектра
-    peak_idx_fft = np.argmax(spectrum)
-    f0_dtft = freq_range[peak_idx_fft]
+    peaks_idx_fft, _ = find_peaks(spectrum, height=np.max(spectrum * 0.7))
+    f0_dtft = freq_range[peaks_idx_fft[0]]
 
     plt.figure(figsize=(10, 4))
     plt.plot(freq_range, spectrum)
@@ -233,7 +233,7 @@ if __name__ == "__main__":
 
     # ---- 6. Применение PSOLA и сохранение результата ----
     try:
-        k = 0.75  # коэффициент повышения частоты (можно изменить)
+        k = 1.5  # коэффициент повышения частоты (можно изменить)
         y_psola = psola(x, fs, k)
         # Нормализуем выходной сигнал
         y_psola = y_psola / np.max(np.abs(y_psola))
