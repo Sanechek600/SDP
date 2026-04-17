@@ -2,9 +2,12 @@
 
 import unittest
 
+import unittest
 import numpy as np
 from scipy.fft import fft
 from scipy.signal import stft
+from scipy.io import wavfile
+import matplotlib.pyplot as plt
 
 
 def dft(x: np.ndarray) -> np.ndarray:
@@ -89,9 +92,23 @@ class Test(unittest.TestCase):
 
 
 def main() -> None:
-    unittest.main()
+    #unittest.main()
 
-    # TODO #3: Загрузить wav-файл и отрисовать модуль КВПФ
+    fs, x = wavfile.read("6412-28.wav")
+    if len(x.shape) > 1:
+        x = x.mean(axis=1)
+
+    f, t, spectrum = stft(x, fs, nperseg=4096, noverlap=2048)
+    mag_squared = np.abs(spectrum) ** 2
+
+    plt.figure('Spectrogram')
+    plt.pcolormesh(t, f, mag_squared, shading='gouraud')
+    plt.ylim(300, 1000)
+    plt.xlabel('Time [sec]')
+    plt.ylabel('Frequency [Hz]')
+    plt.title('STFT Spectrogram')
+
+    plt.show()
 
 
 if __name__ == "__main__":
