@@ -8,20 +8,36 @@ from scipy.signal import stft
 
 
 def dft(x: np.ndarray) -> np.ndarray:
-    # TODO #1: Реализовать ДПФ
+    N = len(x)                     
+    n = np.arange(N)               
+    m = n.reshape(-1, 1)           
+    # Матрица поворачивающих множителей W = exp(-2πj * m * n / N)
+    W = np.exp(-2j * np.pi * m * n / N)
+    # Умножение матрицы на вектор (ДПФ)
+    return W @ x
 
     return x
 
 
 def real_stft(x: np.ndarray, segment: int, overlap: int) -> np.ndarray:
-    n = x.shape[0]
-    assert len(x.shape) == 1
-    assert segment < n
-    assert overlap < segment
-
-    # TODO #2: Реализовать КВПФ
-
-    return np.zeros(1)
+    n_samples = x.shape[0]
+    step = segment - overlap
+    
+    if n_samples < segment:
+        return np.zeros((segment // 2 + 1, 0))
+        
+    num_segments = (n_samples - overlap) // step
+    num_bins = segment // 2 + 1
+    
+    result = np.zeros((num_bins, num_segments), dtype=np.complex128)
+    
+    for i in range(num_segments):
+        start = i * step
+        seg = x[start : start + segment]
+        X = dft(seg)
+        result[:, i] = X[:num_bins]
+        
+    return result
 
 
 class Test(unittest.TestCase):
@@ -43,7 +59,7 @@ class Test(unittest.TestCase):
                 expected = fft(x)
                 self.assertTrue(np.allclose(actual, expected))
 
-    @unittest.skip
+    #@unittest.skip
     def test_stft(self) -> None:
         params_list = (
             Test.Params(50, 10, 5),
