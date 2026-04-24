@@ -19,8 +19,6 @@ def dft(x: np.ndarray) -> np.ndarray:
     # Умножение матрицы на вектор (ДПФ)
     return W @ x
 
-    return x
-
 
 def real_stft(x: np.ndarray, segment: int, overlap: int) -> np.ndarray:
     n_samples = x.shape[0]
@@ -92,7 +90,7 @@ class Test(unittest.TestCase):
 
 
 def main() -> None:
-    #unittest.main()
+    unittest.main()
 
     fs, x = wavfile.read("6412-28.wav")
     if len(x.shape) > 1:
@@ -109,7 +107,7 @@ def main() -> None:
     plt.title('STFT Spectrogram')
 
     plt.show()
-
+    
 
 if __name__ == "__main__":
     main()
