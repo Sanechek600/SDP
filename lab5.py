@@ -125,35 +125,35 @@ class Test(unittest.TestCase):
 def main() -> None:
     unittest.main(exit=False)
 
-    sample_rate, data = wavfile.read("./voice/input.wav")
+    sample_rate, signal = wavfile.read("input.wav")
     
     segment_ms = 20
-    nperseg = int(sample_rate * segment_ms / 1000)
+    nperseg = int(sample_rate * segment_ms / 500)
     noverlap = nperseg // 2
     window = 'hann'
     
-    if data.ndim > 1:
-        data_t = data.T
+    if signal.ndim > 1:
+        signal_t = signal.T
     else:
-        data_t = data
+        signal_t = signal
         
-    f, t, Zxx = stft(data_t, fs=sample_rate, window=window, nperseg=nperseg, noverlap=noverlap)
+    f, t, Zxx = stft(signal_t, fs=sample_rate, window=window, nperseg=nperseg, noverlap=noverlap)
     
     Zxx_robot = np.abs(Zxx)
     
-    _, data_robot_t = istft(Zxx_robot, fs=sample_rate, window=window, nperseg=nperseg, noverlap=noverlap)
+    _, signal_robot_t = istft(Zxx_robot, fs=sample_rate, window=window, nperseg=nperseg, noverlap=noverlap)
     
-    if data.ndim > 1:
-        data_robot = data_robot_t.T
+    if signal.ndim > 1:
+        signal_robot = signal_robot_t.T
     else:
-        data_robot = data_robot_t
+        signal_robot = signal_robot_t
         
-    if np.issubdtype(data.dtype, np.integer):
-        info = np.iinfo(data.dtype)
-        data_robot = np.clip(data_robot, info.min, info.max)
-    data_robot = data_robot.astype(data.dtype)
+    if np.issubdtype(signal.dtype, np.integer):
+        info = np.iinfo(signal.dtype)
+        signal_robot = np.clip(signal_robot, info.min, info.max)
+    signal_robot = signal_robot.astype(signal.dtype)
     
-    wavfile.write("./voice/output.wav", sample_rate, data_robot)
+    wavfile.write("output.wav", sample_rate, signal_robot)
 
 
 if __name__ == "__main__":
