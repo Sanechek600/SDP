@@ -87,21 +87,22 @@ def calculate_M_w0(y, h_est):
     
     half_len = N // 2
     spectrum_amp = np.abs(spectrum[:half_len])
-    k = np.argmax(spectrum_amp)
+    k_max = np.argmax(spectrum_amp)
 
-    w0 = 2 * np.pi * k / N
-    M = int(np.round(N / (2 * k)))
+    w0 = 2 * np.pi * k_max / N
+    M = int(np.round(N / (2 * k_max)))
 
     plt.figure(figsize=(10, 4))
     plt.plot(np.abs(spectrum[:half_len]))
-    plt.axvline(k, color='r', linestyle='--', label='w0')
-    plt.axvline(k * 2, color='r', linestyle=':', label='2w0')
-    plt.axvline(k * 3, color='r', linestyle='--', label='3w0')
+    plt.axvline(k_max, color='r', linestyle='--', label='w0')
+    plt.axvline(k_max * 2, color='r', linestyle=':', label='2w0')
+    plt.axvline(k_max * 3, color='r', linestyle='--', label='3w0')
     plt.title("Амплитудный спектр исходного сигнала")
     plt.legend()
     plt.savefig("plots/spectrum_original.png", dpi=150)
     plt.show()
 
+    print(f"Индекс k = {k_max}")
     print(f"Частота среза w0 = {w0:.5f}")
     print(f"Размер точки M = {M}")
     return w0, M
@@ -219,7 +220,8 @@ def main():
     max_val = np.max(np.abs(h_est))
     significant_indices = np.where(np.abs(h_est) > 0.05 * max_val)[0]
 
-    print("\nЗначимые индексы:", significant_indices)
+    print("\nN: ", h_all.shape[1])
+    print("Значимые индексы:", significant_indices)
     print("Их значения для формулы:")
     for idx in significant_indices:
         print(f"h[{idx}] = {h_est[idx]:.6f}")
