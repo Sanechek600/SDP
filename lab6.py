@@ -10,7 +10,6 @@ from morse_encode import MORSE_CODES, morse_encode
 
 
 def ensure_plots_dir():
-    """Создаёт папку plots, если её нет"""
     if not os.path.exists("plots"):
         os.makedirs("plots")
 
